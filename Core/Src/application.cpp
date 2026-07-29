@@ -1,6 +1,4 @@
 #include <cstdio>
-
-#include "application.h"
 #include "csp/csp4cmsis.h"
 
 using namespace csp;
