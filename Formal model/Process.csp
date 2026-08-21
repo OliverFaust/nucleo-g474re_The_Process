@@ -1,6 +1,7 @@
--- process
+-- CSPm specification of HelloProcess (Section~\ref{sec:process-formal})
 channel print
+channel delay
 
-HelloProcess =
-    print -> SKIP;
-    HelloProcessMAIN = SKIP
+HelloProcess = print -> delay -> HelloProcess
+
+SYSTEM = HelloProcess
