@@ -1,4 +1,4 @@
--- CSPm specification of HelloProcess (Section~\ref{sec:process-formal})
+-- CSPm specification of the HelloProcess 
 channel print
 channel delay
 
