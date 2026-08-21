@@ -13,9 +13,10 @@ The model specifies a basic sequential unit of computation that interacts with i
 ## CSP-M Specification
 
 ```csp
--- process
+-- CSPm specification of the HelloProcess 
 channel print
+channel delay
 
-HelloProcess =
-    print -> SKIP;
-    HelloProcessMAIN = SKIP
+HelloProcess = print -> delay -> HelloProcess
+
+SYSTEM = HelloProcess
