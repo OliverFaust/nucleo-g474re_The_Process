@@ -1,0 +1,33 @@
+# elf: book-clone/Debug/nucleo-g474re_The_Process.elf sha256=2d8bec58a26536fe401d5281b0956f2a917ea69688beb282e69c0963f5c83458
+# port: /dev/serial/by-id/usb-STMicroelectronics_STLINK-V3_002000353234510836303532-if02
+# start: 2026-10-03 14:23:01
+Welcome to STM32 world !
+
+=== STM32 FreeRTOS + CSP4CMSIS bootstrap ===
+
+--- Single Hello World Process ---
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+
+# TIMEOUT after 20 s
+
+# end: 2026-10-03 14:23:22 (20 s)
