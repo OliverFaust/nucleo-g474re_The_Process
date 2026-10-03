@@ -24,7 +24,7 @@ unmodified. Baseline (before): `BASELINE.md`. Measurement script: `measure.py`.
 | text / data / bss (B) | 34 456 / 132 / 37 804 | 35 964 / 132 / 48 608 | 21 824 / 112 / 48 520 |
 | UART (20 s, from reset) | Welcome, bootstrap banner, `--- Single Hello World Process ---`, 21 × `Hello world` | **identical** | **identical** |
 | HelloProcess stack (1 KB) | 340 B used | 348 B used | 300 B used |
-| MainApp stack (8 KB) | (heap; not measured) | 348 B used (static) | 300 B used |
+| MainApp stack (8 KB; 2 KB since the follow-up below) | (heap; not measured) | 348 B used (static) | 300 B used |
 | defaultTask stack (2 KB) | (heap; not measured) | 128 B used (static) | 100 B used |
 | Priorities Hello / MainApp / defaultTask | 2 / 3 / 24 | 8 / 16 / 24 (read from the TCBs) | 8 / 16 / 24 |
 | FreeRTOS heap | 10 472 B peak | **0 allocations** | **0 allocations** |
@@ -49,5 +49,22 @@ unmodified. Baseline (before): `BASELINE.md`. Measurement script: `measure.py`.
   Debug: flash image identical (`objcopy -O binary`); the ELF contains the build path in its debug
   information. Output and measurements identical
   (`fresh_debug_uart.txt`). `language.settings.xml` was recreated by the import (ignored by git).
+
+## Follow-up: smaller FreeRTOS heap and MainApp stack
+
+`configTOTAL_HEAP_SIZE` 30 720 -> 1024 B (in the `.ioc`; nothing allocates from the FreeRTOS heap: 0
+allocations measured; 1 KB still fits one 128-word dynamic thread: 512 B stack + 168 B TCB + heap_4
+block headers). MainApp's stack 8 KB -> 2 KB (512 words; measured use 348 B Debug, 300 B Release).
+
+| | Debug | Release |
+|---|---|---|
+| Build | 0 errors, 0 warnings | 0 errors, 0 warnings |
+| text / data / bss (B) | 35 964 / 132 / 12 768 | 21 824 / 112 / 12 680 |
+| UART (20 s, from reset) | identical (21 × `Hello world`) | identical |
+| Stacks used: Hello / MainApp / defaultTask | 348 / 348 of 2048 / 128 B | 300 / 300 of 2048 / 100 B |
+| Priorities | 8 / 16 / 24 | 8 / 16 / 24 |
+| FreeRTOS heap / newlib `_sbrk` | 0 allocations / 1032 B | 0 allocations / 1032 B |
+
+Regeneration from the `.ioc` afterwards: no change in git; rebuilt ELFs identical (`small_*` logs).
 
 Logs: `results/` (UART logs with ELF SHA-256; `*_swd.txt`: SWD readings).

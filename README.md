@@ -70,7 +70,7 @@ The CSP4CMSIS settings are already in the project (G++ compiler, Debug and Relea
 2. **Infinite loop**: Inside `run()`, the process prints `"Hello world"` and then sleeps for 1000 ms with `SleepFor(Milliseconds(1000).to_ticks())`.  
 3. **Parallel composition**: `InParallel(hello)` composes the single process.  
 4. **Static network**: `Run(..., ExecutionMode::StaticNetwork, priority)` creates the process's thread and returns; the network runs for ever.  
-5. **Start-up**: `main.c` calls `csp_app_main_init()`, which creates the `MainApp` thread (static 8 KB stack). `MainApp` prints the banner, starts the network and exits. `MainApp` runs at a higher priority (`osPriorityBelowNormal`) than the network (`osPriorityLow`), so `HelloProcess` first runs after `MainApp` has exited.
+5. **Start-up**: `main.c` calls `csp_app_main_init()`, which creates the `MainApp` thread (static 2 KB stack). `MainApp` prints the banner, starts the network and exits. `MainApp` runs at a higher priority (`osPriorityBelowNormal`) than the network (`osPriorityLow`), so `HelloProcess` first runs after `MainApp` has exited.
 
 Because there is only one process, no channels are needed – the process runs independently.
 
@@ -92,9 +92,9 @@ Hello world
 
 Measured on the board (Debug and Release, after 20 s):
 
-- **FreeRTOS heap: not used.** `pvPortMalloc()` is never called (0 allocations). `HelloProcess`, `MainApp`, CubeMX's `defaultTask`, and FreeRTOS's idle and timer tasks all have static stacks and control blocks. The 30 KB FreeRTOS heap (`configTOTAL_HEAP_SIZE`) stays reserved but unused.
+- **FreeRTOS heap: not used.** `pvPortMalloc()` is never called (0 allocations). `HelloProcess`, `MainApp`, CubeMX's `defaultTask`, and FreeRTOS's idle and timer tasks all have static stacks and control blocks. The FreeRTOS heap (`configTOTAL_HEAP_SIZE`) is therefore set to only 1 KB: enough for one small dynamically created thread (a 128‑word stack and its control block) if you switch one back to dynamic allocation.
 - **C library heap: 1 KB.** newlib's `printf()` allocates its `stdout` buffer with `malloc()` on first use (1032 B from `_sbrk()`). This is the only dynamic allocation.
-- **Stacks used** (Debug; Release in brackets): `HelloProcess` 348 B (300 B) of 1 KB, `MainApp` 348 B (300 B) of 8 KB, `defaultTask` 128 B (100 B) of 2 KB.
+- **Stacks used** (Debug; Release in brackets): `HelloProcess` 348 B (300 B) of 1 KB, `MainApp` 348 B (300 B) of 2 KB, `defaultTask` 128 B (100 B) of 2 KB.
 
 ## Key CSP4CMSIS Concepts Demonstrated
 * **Process** – creating a custom process by inheriting from `CSProcessStatic<N>`.

@@ -119,7 +119,8 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
    - Two named priority constants with the start-order comment; `Run()` gets the priority as a third
      argument.
 2. **Stack units:** `CSProcessStatic<256>` counts words (1 KB), while `osThreadAttr_t.stack_size`
-   counts bytes (8 KB = 2048 words; the old `xTaskCreate(..., 2048, ...)` counted words).
+   counts bytes (MainApp: 512 words = 2 KB, measured use 348 B; the old `xTaskCreate(..., 2048, ...)`
+   counted words, i.e. 8 KB).
 3. **Priorities:**
    - CMSIS-RTOS2 names and values: HelloProcess `osPriorityLow` (8), MainApp `osPriorityBelowNormal`
      (16), defaultTask `osPriorityNormal` (24); formerly 2, 3 and 24.
@@ -130,7 +131,7 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
      (CubeMX regeneration deletes code outside them).
 5. **CubeMX settings** the reader makes or sees:
    - `USE_NEWLIB_REENTRANT` Enabled;
-   - heap size set in the `.ioc` (30 720);
+   - heap size set in the `.ioc`: 1024 B (was 30 KB by hand; nothing allocates from it now);
    - `defaultTask` Allocation Static (CubeMX does not let you remove it);
    - the printing `configASSERT`;
    - FW_G4 V1.6.3, CubeMX 6.17.0, CubeIDE 2.1.0.

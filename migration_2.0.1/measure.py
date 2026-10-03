@@ -11,10 +11,11 @@ secs = sys.argv[3] if len(sys.argv) > 3 else '20'
 CLI = os.environ.get('STM32_PROGRAMMER_CLI', 'STM32_Programmer_CLI')
 print(subprocess.run(['python3', os.environ['NUCLEO_RUN'], elf, log, secs],
                      capture_output=True, text=True).stdout.strip().splitlines()[-1])
-syms = {}
-for l in subprocess.run(['arm-none-eabi-nm', '-C', elf], capture_output=True, text=True).stdout.splitlines():
-    p = l.split(' ', 2)
-    if len(p) == 3: syms[p[2]] = int(p[0], 16)
+syms, sizes = {}, {}
+for l in subprocess.run(['arm-none-eabi-nm', '-C', '-S', elf], capture_output=True, text=True).stdout.splitlines():
+    p = l.split(' ', 3)
+    if len(p) == 4: syms[p[3]], sizes[p[3]] = int(p[0], 16), int(p[1], 16)
+    elif len(p) == 3: syms[p[2]] = int(p[0], 16)
 def words(addr, n):
     out = subprocess.run([CLI, '-c', 'port=SWD', 'mode=HOTPLUG', '-r32', hex(addr), str(n * 4)],
                          capture_output=True, text=True).stdout
@@ -35,8 +36,8 @@ def tcb(name, addr):
     print(f'thread {name:12s} priority {w[0x2c // 4]:2d}  name "{nm}"')
 hello = syms['MainApp_Task(void*)::hello']
 stack('HelloProcess', hello + 0x10, 1024)
-stack('MainApp', syms['mainAppStack'], 8192)
-stack('defaultTask', syms['defaultTaskBuffer'], 2048)
+stack('MainApp', syms['mainAppStack'], sizes['mainAppStack'])
+stack('defaultTask', syms['defaultTaskBuffer'], sizes['defaultTaskBuffer'])
 tcb('HelloProcess', hello + 0x410)
 tcb('MainApp', syms['mainAppControlBlock'])
 tcb('defaultTask', syms['defaultTaskControlBlock'])
