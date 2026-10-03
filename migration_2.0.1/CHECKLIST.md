@@ -1,7 +1,8 @@
 # Checklist: updating a book example to CSP4CMSIS 2.0.1
 
-Done first on nucleo-g474re_The_Process (`RESULTS.md`). For the other chapter repositories
-(nucleo-g474re_Processes_and_Channels, _Interrupts, _Alternation, _Sensor_Data_Processing_Network).
+Done first on nucleo-g474re_The_Process (`RESULTS.md`), then on nucleo-g474re_Processes_and_Channels
+(its `migration_2.0.1/RESULTS.md`; generic scripts `measure.py`, `seqcheck.py`, `run.sh` there).
+Remaining: _Interrupts, _Alternation, _Sensor_Data_Processing_Network.
 Work on a branch `csp4cmsis-2.0.1`; commit locally; one commit per step below.
 
 Tools: STM32CubeIDE 2.1.0, STM32CubeMX 6.17.0, FW_G4 V1.6.3, STM32CubeProgrammer, the CSP4CMSIS
@@ -23,10 +24,26 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
 - [ ] `main.c` and `FreeRTOSConfig.h`: application code outside `USER CODE` markers (regeneration
       deletes it); hand edits to generated lines (`configTOTAL_HEAP_SIZE`).
 - [ ] API inventory of `Core/Src/application.cpp`: FreeRTOS calls, priorities, stack sizes,
-      `putFromISR`, ALT, channels (table in section 4).
+      `putFromISR`, ALT, channels (table in section 5).
+- [ ] Every channel: type (`Channel<T>` = `SamplingChannel<T, Block>` = rendezvous in the old snapshot
+      and in 2.0.1; `BufferedChannel<T, N>`), policy, element type, writers/readers, ISR use.
+      **Stop and report before changing anything** if the example uses a policy other than Block on
+      a rendezvous channel, `putFromISR` (on any channel), a non-trivially-copyable element type,
+      ALT with timeouts, or anything else whose meaning changes in 2.0: those compile differently or
+      not at all in 2.0.1 (see the table in section 5).
+- [ ] Top-level `LICENSE`: The_Process and _Processes_and_Channels said "Copyright (c) 2024 Your Name".
 - [ ] Build Debug and Release; flash Debug; log the UART (`nucleo_run.py`, 20 s); read the stack fill
-      (0xA5) of each process and the heap counters (`xFreeBytesRemaining`,
-      `xMinimumEverFreeBytesRemaining`) over SWD in hotplug mode.
+      (0xA5) of each process and thread, the TCB priorities, the heap_4 counters
+      (`xFreeBytesRemaining`, `xMinimumEverFreeBytesRemaining`, `xNumberOfSuccessfulAllocations`,
+      `xNumberOfSuccessfulFrees`) and `__sbrk_heap_end` over SWD in hotplug mode
+      (_Processes_and_Channels' `measure.py --stack/--tcb`). Process objects (`CSProcessStatic<N>`):
+      stack at +0x10, TCB at +0x10 + 4·N, in the old snapshot and in 2.0.1 (check with
+      `arm-none-eabi-gdb`: `print &((Class*)0)->m_stack`).
+- [ ] A baseline with **0 frees** after the launcher's `vTaskDelete(NULL)` is not a code leak: FreeRTOS
+      frees a deleted task's memory in the idle task, which never runs while the network is always
+      ready (e.g. a receiver printing continuously).
+- [ ] Continuous output (channel examples): compare the header and the value sequence
+      (`seqcheck.py`: in order, no gaps), not the number of lines in the log window.
 
 ## 2. Make regeneration safe (commit)
 
@@ -80,14 +97,25 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
   | `chan.writer().putFromISR(x)` (_Interrupts, _Sensor) | `SamplingBufferedChannel<T, SIZE>` + `chan.isrWriter().putFromISR(x)` | **semantics**: an ISR can write only into a buffered channel (a rendezvous `Channel<T>` has no ISR writer); `sizeof(T) <= 64` (compile-time check); ISR priority numerically >= 5; no `portYIELD_FROM_ISR` needed (the wakeup, `osThreadFlagsSet`/`osSemaphoreRelease`, yields in ISR context on ST's wrapper) |
   | `Alternative alt(in | var, ...)`, `fairSelect()` (_Alternation) | same syntax in 2.0.1 | check guard and channel types compile; timeouts: `RelTimeoutGuard` (2.0.1: no RTOS timer) |
 
+- [ ] Channels (2.0.1, checked at compile time): rendezvous `Channel<T>` needs a trivially copyable `T`,
+      accepts only `BufferPolicy::Block`, and has no ISR writer; it creates no RTOS object (critical
+      section + thread flags). Buffered channels use CMSIS-RTOS2 semaphores (`csp_semaphore.h`),
+      static with `CSP4CMSIS_STATIC_ALLOCATION`.
 - [ ] Priorities: state the intended order in a code comment; check on the board (TCB `uxPriority`)
       and, where it matters, the start order with an instrumented scratch copy plus a control with the
-      order reversed.
+      order reversed. The old network ran at native 2, the same as CubeMX's timer task (2); at
+      `osPriorityLow` (8) it runs above it (no software timers are used).
+- [ ] Right-size from the board measurements (first with a generous MainApp stack, e.g. 2 KB):
+      MainApp stack about twice the Debug use, with the measured Debug/Release values in the comment;
+      `FREERTOS.configTOTAL_HEAP_SIZE=1024` in the `.ioc` when 0 FreeRTOS heap allocations are measured
+      (1 KB still fits one 128-word dynamic thread), with a comment in `FreeRTOSConfig.h`
+      `USER CODE Defines` (generated lines cannot hold comments).
 - [ ] Build Debug and Release: 0 errors, 0 warnings.
 
-## 6. Untrack `.settings/language.settings.xml` (commit)
+## 6. Untrack `.settings/language.settings.xml`; fix LICENSE (one commit each)
 
 - [ ] `git rm --cached`; add to `.gitignore`. (Verified by the fresh-clone import in step 8.)
+- [ ] `LICENSE`: "Copyright (c) <year of the first commit> Oliver Faust"; MIT text unchanged.
 
 ## 7. README (commit)
 
@@ -95,15 +123,17 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
       (`lib/csp4cmsis/`, not a submodule); console = LPUART1 (ST-LINK VCP); formal-model link to the
       repository's own folder; memory claims **only as measured** (FreeRTOS heap allocations, newlib
       `_sbrk`, stacks); How it works / Troubleshooting with the 2.0.1 calls.
-- [ ] Check the top-level `LICENSE` (here it reads "Copyright (c) 2024 Your Name").
+- [ ] Describe printed output exactly (e.g. _Processes_and_Channels' receiver prints the received
+      value twice as `Send: X Received: X`).
 
 ## 8. Verification (commit `RESULTS.md` and logs)
 
 - [ ] Board (Debug and Release): output from reset identical to the baseline; stacks, priorities,
-      FreeRTOS heap (allocation count), `_sbrk` (`measure.py`: adapt the symbol names and the process
-      object offsets, taken with `arm-none-eabi-gdb` from the Debug ELF). The first lines of a log can
+      FreeRTOS heap (allocation count), `_sbrk` (a per-example `run.sh` calling the generic
+      `measure.py` with `--stack`/`--tcb` for each process and thread). The first lines of a log can
       be stale VCP data from the previously running image: compare from the reset banner.
-- [ ] Regenerate from the `.ioc`: `git status` clean; rebuilt ELFs identical; board output identical.
+- [ ] Regenerate from the `.ioc`: `git status` clean; rebuilt ELFs byte-identical (then the board
+      output is identical by construction).
 - [ ] Fresh clone to another path, empty workspace, import, build both configurations, flash:
       output identical; Release ELF identical.
 
