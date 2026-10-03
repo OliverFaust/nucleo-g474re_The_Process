@@ -168,11 +168,12 @@ int main(void)
   /* -- Sample board code to switch on led ---- */
   BSP_LED_On(LED_GREEN);
 
-  /* USER CODE END BSP */
   printf("\r\n=== STM32 FreeRTOS + CSP4CMSIS bootstrap ===\r\n");
 
   /* ---- CSP APPLICATION ENTRY POINT ---- */
   csp_app_main_init();
+
+  /* USER CODE END BSP */
 
   /* Start scheduler */
   osKernelStart();
