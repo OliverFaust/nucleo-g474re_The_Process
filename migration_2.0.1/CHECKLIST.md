@@ -222,6 +222,11 @@ keep step 2 to changes whose generated output is known.
       natural interrupts also arrive: compare differences over a short window, not totals.
 - [ ] **[SENSOR] Hardware with the sensor connected** for the board results; without it only the
       interrupt mechanics can be checked (WHO_AM_I fails, readings are zero).
+- [ ] **[SENSOR] Functional test that needs a person** (shake, press): start a long UART capture in
+      the background (e.g. 120 s), then give the instruction (when, what, how long); run old and new
+      image with the same pattern. Counts differ with the hand stimulus: compare that both detect and
+      that the messages alternate correctly. Read stack marks afterwards over SWD without reflashing
+      (the image keeps running), so the printing paths are included.
 - [ ] Regenerate from the `.ioc`: `git status` clean; rebuilt ELFs byte-identical (then the board
       output is identical by construction).
 - [ ] Fresh clone to another path, empty workspace, import, build both configurations, flash:
