@@ -108,9 +108,11 @@ Measured on the board (Debug and Release, after 20 s):
 * **Program hangs**: Ensure `SleepFor()` is called in the loop; without it the process never blocks, and threads at lower priority (the FreeRTOS idle and timer tasks) never run.
 * **`configASSERT failed: <file>:<line>`** on the console: a FreeRTOS assertion failed at that source line; the program halts there.
 
-## License
+## License and Declaration
 
 MIT License – see the `LICENSE` file. CSP4CMSIS: MIT License, `lib/csp4cmsis/LICENSE`.
+
+Development of this project utilizes AI coding assistants for boilerplate generation, unit test creation, and architectural drafting. All core logic is manually reviewed and verified.
 
 ## Acknowledgments
 
