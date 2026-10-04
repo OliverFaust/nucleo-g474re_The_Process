@@ -1,15 +1,23 @@
 # Checklist: updating a book example to CSP4CMSIS 2.0.1
 
 Done first on nucleo-g474re_The_Process (`RESULTS.md`), then on nucleo-g474re_Processes_and_Channels
-(its `migration_2.0.1/RESULTS.md`; generic scripts `measure.py`, `seqcheck.py`, `run.sh` there).
-Remaining: _Interrupts, _Alternation, _Sensor_Data_Processing_Network.
+(its `migration_2.0.1/RESULTS.md`; generic scripts `measure.py`, `seqcheck.py`, `run.sh` there), then
+on nucleo-g474re_Interrupts (interrupt steps marked **[IRQ]** below; scripts `run.sh` with SWD-injected
+interrupts, `burst_patch.py`, `burst_read.sh` there).
+then on nucleo-g474re_Sensor_Data_Processing_Network (sensor data-ready interrupt, steps marked
+**[SENSOR]**; scripts `run.sh`, `overrun_patch.py`, `overrun_read.sh` there).
+Remaining: _Alternation.
 Work on a branch `csp4cmsis-2.0.1`; commit locally; one commit per step below.
 
 Tools: STM32CubeIDE 2.1.0, STM32CubeMX 6.17.0, FW_G4 V1.6.3, STM32CubeProgrammer, the CSP4CMSIS
 repository at tag v2.0.1 (for the library and `tests/hw_nucleo_g474/nucleo_run.py`), NUCLEO-G474RE.
 Build headless: `headless-build.sh -data <empty workspace> -import <repo> -cleanBuild <project>`.
 Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate` / `exit`
-(a "Warning: Code Generation" dialog means `USE_NEWLIB_REENTRANT` is still off).
+(a "Warning: Code Generation" dialog means `USE_NEWLIB_REENTRANT` is still off). Since 2026-10-04,
+CubeMX 6.17.0 also stops loading any project still on FW_G4 **V1.6.1** with a "New STM32Cube firmware
+version available" dialog (the CLI hangs: `regen.sh` reports TIMEOUT). Projects on V1.6.3 are not
+affected: do every regeneration that needs new `.ioc` settings after the migration (step 3), and
+keep step 2 to changes whose generated output is known.
 
 ## 1. Analysis and baseline (commit: `migration_2.0.1/BASELINE.md`)
 
@@ -54,6 +62,28 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
 - [ ] Regenerate with the current firmware; the diff must be only the intended lines, `.cproject`
       reordering and `.mxproject` (commit it: relative paths only). Do not commit
       `.settings/language.settings.xml`.
+- [ ] **Look at every file the regeneration changes outside `Core/`**: a change in `Drivers/` means
+      someone edited a generated driver (_Interrupts: `BSP_PB_Init()` hand-edited from rising to
+      rising+falling edge). Restore the original and redo the change in a USER CODE section.
+- [ ] Check what regeneration deleted from `main.c`, not only the bootstrap lines: includes outside
+      `USER CODE Includes` (`<stdbool.h>`), and functions CubeMX itself generates, e.g. with the BSP
+      demo code on (`NUCLEO-G474RE.Bsp_Common_DEMO=true`) CubeMX generates `BSP_PB_Callback()`
+      outside USER CODE, replacing the application's. Build and run after regenerating.
+- [ ] **Hand-edited generated peripheral code** (_Sensor: `MX_SPI2_Init()` edited to the working SPI
+      mode while the `.ioc` kept invalid values, so CubeMX refused to generate: "IP not ready for
+      code generation: SPI2" in the log, shown as a "Warning: Code Generation" dialog). Put the
+      working values into the `.ioc` and check that CubeMX generates the same initialisation.
+- [ ] Hand-written IRQ handlers in `stm32g4xx_it.c` (outside USER CODE) for interrupts the `.ioc`
+      does not enable: enable the IRQ in the `.ioc` NVIC table instead ("Uses FreeRTOS functions");
+      CubeMX then generates the handler and the NVIC setup. CubeMX sets such an IRQ to priority 5
+      (= the threshold; valid) and resets edits of the value.
+- [ ] A `defaultTask` deleted from `main.c` by hand comes back on regeneration: plan its stack.
+- [ ] Tracked build output (`Debug/` makefiles, `.launch`), even if `.gitignore` lists it: untrack
+      it (it holds absolute paths); a fresh clone must build without it.
+- [ ] Find the CubeIDE project name in `.project` (it can differ from the `.ioc` name) for
+      `headless-build.sh -cleanBuild <project>`.
+- [ ] Double-spaced or unindented USER CODE sections (an old editor artefact): restore CubeMX's own
+      layout for the default sections (whitespace-only commit).
 
 ## 3. Migrate to FW_G4 V1.6.3 (own commit)
 
@@ -62,6 +92,26 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
 - [ ] Check: `git diff --stat Middlewares` empty (FreeRTOS 10.3.1 in both V1.6.1 and V1.6.3); only HAL,
       CMSIS device and BSP files change. Debug builds. (_Sensor_Data_Processing_Network is already
       on V1.6.3 / 6.17.0: skip.)
+
+## 3a. [IRQ] Interrupt configuration (commit)
+
+- [ ] Find the interrupt path: IRQ handler (`stm32g4xx_it.c`), BSP handler, HAL callback, the
+      application's hook; read on the board (SWD) what actually applies: EXTI `IMR1`/`RTSR1`/`FTSR1`
+      (0x40010400/08/0C) and the NVIC priority byte (`0xE000E400 + IRQn`, upper 4 bits).
+- [ ] Button (B1, PC13, EXTI line 13, `EXTI15_10_IRQn`): `BSP_PB_Init(BUTTON_MODE_EXTI)` (FW V1.6.1
+      and V1.6.3) enables the **rising edge only**, pull-down. A second edge goes in `USER CODE BSP`
+      (after the generated `BSP_PB_Init()`): `HAL_GPIO_Init()` with `GPIO_MODE_IT_RISING_FALLING`.
+- [ ] Application callback with the BSP demo code on: do **not** switch the demo off (CubeMX then also
+      drops `USER CODE BSP`, the only section between the BSP init and `osKernelStart()`, and leaves
+      demo code referencing a deleted variable). Register the application's callback instead, in
+      `USER CODE BSP`: `HAL_EXTI_RegisterCallback(&hpb_exti[BUTTON_USER], HAL_EXTI_COMMON_CB_ID, cb);`
+      with `cb` in `USER CODE 4` (path: `EXTI15_10_IRQHandler` -> `BSP_PB_IRQHandler` ->
+      `HAL_EXTI_IRQHandler` -> `cb`).
+- [ ] Priority: numerically >= `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` (5). The button's is 15,
+      fixed by CubeMX's BSP template (`BSP_BUTTON_USER_IT_PRIORITY 15U` in `stm32g4xx_nucleo_conf.h`);
+      the `.ioc` NVIC entry of a BSP-owned IRQ generates no code, and CubeMX resets edits of it.
+      Peripheral IRQs configured in the `.ioc` itself: set the priority there, "Uses FreeRTOS
+      functions" checked.
 
 ## 4. CubeMX: static defaultTask, printing configASSERT (commit)
 
@@ -94,9 +144,27 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
   | `Run(InParallel(...), mode)` | `Run(InParallel(...), mode, priority)` | default priority was native 2, is now `osPriorityLow` (8): pass it explicitly, chosen against the launcher's priority (start order) |
   | `CSProcessStatic<N>` | same | N in words (1 word = 4 B) |
   | `taskPriority()` / `stackWords()` overrides | `osPriority_t taskPriority()`; `stackWords()` is final in `CSProcessStatic` | |
-  | `chan.writer().putFromISR(x)` (_Interrupts, _Sensor) | `SamplingBufferedChannel<T, SIZE>` + `chan.isrWriter().putFromISR(x)` | **semantics**: an ISR can write only into a buffered channel (a rendezvous `Channel<T>` has no ISR writer); `sizeof(T) <= 64` (compile-time check); ISR priority numerically >= 5; no `portYIELD_FROM_ISR` needed (the wakeup, `osThreadFlagsSet`/`osSemaphoreRelease`, yields in ISR context on ST's wrapper) |
+  | `chan.writer().putFromISR(x)` (_Interrupts done, _Sensor) | `SamplingBufferedChannel<T, SIZE>` + `chan.isrWriter().putFromISR(x)` | **semantics**: an ISR can write only into a buffered channel (a rendezvous `Channel<T>` has no ISR writer); `sizeof(T) <= 64` (compile-time check); ISR priority numerically >= 5; no `portYIELD_FROM_ISR` needed (the wakeup, `osThreadFlagsSet`/`osSemaphoreRelease`, yields in ISR context on ST's wrapper) |
   | `Alternative alt(in | var, ...)`, `fairSelect()` (_Alternation) | same syntax in 2.0.1 | check guard and channel types compile; timeouts: `RelTimeoutGuard` (2.0.1: no RTOS timer) |
 
+- [ ] **[IRQ]** ISR -> process: `static SamplingBufferedChannel<T, 1, BufferPolicy::KeepNewest> c;`
+      and `static IsrChanout<T> isr = c.isrWriter();` (same file, after `c`); the ISR calls
+      `isr.putFromISR(x)`: never blocks, always true with KeepNewest; events arriving while the reader
+      is busy merge into the latest. `sizeof(T) <= 64`. Remove any `portYIELD_FROM_ISR` (the
+      library's wakeup yields). Choose the capacity and policy per example (KeepNewest/1 for a
+      button: the latest state counts; a counter or a stream may need a larger buffer).
+- [ ] **[SENSOR] Policy for a data-ready trigger.** Ask what the element carries. A trigger that
+      carries no data ("a new sample is in the sensor") and a sensor that keeps only its latest
+      sample: **KeepNewest, capacity 1** — merged triggers lose nothing a queue would recover (queued
+      triggers would only read the same registers again: duplicate samples). Block with capacity N and
+      a counted overflow only if every element carries its own data (e.g. the ISR or DMA delivers the
+      sample, or the sensor FIFO is used). Elements over 64 B: send an index into a static buffer pool
+      (a channel of free indices returns the buffers) instead of raising the limit.
+- [ ] **[SENSOR] Lost-completion pattern:** a process re-arms the source (here: reading the sample
+      lowers the data-ready line) and then waits for the next interrupt on a rendezvous channel.
+      Under 1.x an interrupt that arrives before it waits is dropped; with an edge-triggered,
+      level-held source (data-ready stays high until read) nothing re-triggers: the pipeline stops
+      for good, silently. A buffered ISR channel keeps the interrupt.
 - [ ] Channels (2.0.1, checked at compile time): rendezvous `Channel<T>` needs a trivially copyable `T`,
       accepts only `BufferPolicy::Block`, and has no ISR writer; it creates no RTOS object (critical
       section + thread flags). Buffered channels use CMSIS-RTOS2 semaphores (`csp_semaphore.h`),
@@ -115,7 +183,8 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
 ## 6. Untrack `.settings/language.settings.xml`; fix LICENSE (one commit each)
 
 - [ ] `git rm --cached`; add to `.gitignore`. (Verified by the fresh-clone import in step 8.)
-- [ ] `LICENSE`: "Copyright (c) <year of the first commit> Oliver Faust"; MIT text unchanged.
+- [ ] `LICENSE`: "Copyright (c) <year of the first commit> Oliver Faust"; MIT text unchanged. If the
+      repository has no LICENSE (_Sensor), add the same MIT file (flag it: a licensing decision).
 
 ## 7. README (commit)
 
@@ -125,6 +194,10 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
       `_sbrk`, stacks); How it works / Troubleshooting with the 2.0.1 calls.
 - [ ] Describe printed output exactly (e.g. _Processes_and_Channels' receiver prints the received
       value twice as `Send: X Received: X`).
+- [ ] **[IRQ]** Explain why an ISR cannot use a rendezvous channel and what the policy means
+      (KeepNewest: merged, replaced, not queued). If more than one process prints: the BSP's
+      `__io_putchar()` drops characters while another thread transmits (`HAL_BUSY` ignored); say so
+      (_Interrupts: measured, one whole line lost in the burst test).
 
 ## 8. Verification (commit `RESULTS.md` and logs)
 
@@ -132,6 +205,28 @@ Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate`
       FreeRTOS heap (allocation count), `_sbrk` (a per-example `run.sh` calling the generic
       `measure.py` with `--stack`/`--tcb` for each process and thread). The first lines of a log can
       be stale VCP data from the previously running image: compare from the reset banner.
+- [ ] **[IRQ]** Inject interrupts without touching the shipped code: SWD write of EXTI `SWIER1`
+      (0x40010410, bit = line; hotplug, while the UART is logged) runs the real EXTI/ISR path.
+      Burst test with an instrumented scratch copy (never committed; `burst_patch.py`): sequence
+      number in the event, count ISR write failures, record delivered sequence numbers; launcher
+      fires 1 interrupt, `osDelay(1)`, then N back to back. Baseline (old rendezvous `putFromISR`):
+      1 of 11 delivered, 10 silent failures. 2.0.1 (KeepNewest/1): first and last delivered, 0
+      failures. Run each three times.
+- [ ] **[SENSOR] Overrun test in two phases** (instrumented scratch copy, `overrun_patch.py`):
+      phase 1, N interrupts right after `Run()` created the network, before the reader waits (the
+      lost-completion case): 1.x loses all N and the reader's first wait lasts until the next
+      interrupt (with a level-held source: for ever); 2.0.1 loses none, the first wait returns at
+      once. Phase 2, N interrupts back to back while the reader waits but cannot run yet: 1.x hands
+      the first to the waiting reader and drops N-1; 2.0.1 buffers the first too, so all N merge
+      into **one** (not two: a buffered channel does not hand over directly). With the real sensor,
+      natural interrupts also arrive: compare differences over a short window, not totals.
+- [ ] **[SENSOR] Hardware with the sensor connected** for the board results; without it only the
+      interrupt mechanics can be checked (WHO_AM_I fails, readings are zero).
+- [ ] **[SENSOR] Functional test that needs a person** (shake, press): start a long UART capture in
+      the background (e.g. 120 s), then give the instruction (when, what, how long); run old and new
+      image with the same pattern. Counts differ with the hand stimulus: compare that both detect and
+      that the messages alternate correctly. Read stack marks afterwards over SWD without reflashing
+      (the image keeps running), so the printing paths are included.
 - [ ] Regenerate from the `.ioc`: `git status` clean; rebuilt ELFs byte-identical (then the board
       output is identical by construction).
 - [ ] Fresh clone to another path, empty workspace, import, build both configurations, flash:
