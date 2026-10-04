@@ -4,8 +4,9 @@ Done first on nucleo-g474re_The_Process (`RESULTS.md`), then on nucleo-g474re_Pr
 (its `migration_2.0.1/RESULTS.md`; generic scripts `measure.py`, `seqcheck.py`, `run.sh` there), then
 on nucleo-g474re_Interrupts (interrupt steps marked **[IRQ]** below; scripts `run.sh` with SWD-injected
 interrupts, `burst_patch.py`, `burst_read.sh` there).
-Remaining: _Alternation, _Sensor_Data_Processing_Network (uses `putFromISR` and `portYIELD_FROM_ISR`:
-follow the [IRQ] steps).
+then on nucleo-g474re_Sensor_Data_Processing_Network (sensor data-ready interrupt, steps marked
+**[SENSOR]**; scripts `run.sh`, `overrun_patch.py`, `overrun_read.sh` there).
+Remaining: _Alternation.
 Work on a branch `csp4cmsis-2.0.1`; commit locally; one commit per step below.
 
 Tools: STM32CubeIDE 2.1.0, STM32CubeMX 6.17.0, FW_G4 V1.6.3, STM32CubeProgrammer, the CSP4CMSIS
@@ -68,6 +69,19 @@ keep step 2 to changes whose generated output is known.
       `USER CODE Includes` (`<stdbool.h>`), and functions CubeMX itself generates, e.g. with the BSP
       demo code on (`NUCLEO-G474RE.Bsp_Common_DEMO=true`) CubeMX generates `BSP_PB_Callback()`
       outside USER CODE, replacing the application's. Build and run after regenerating.
+- [ ] **Hand-edited generated peripheral code** (_Sensor: `MX_SPI2_Init()` edited to the working SPI
+      mode while the `.ioc` kept invalid values, so CubeMX refused to generate: "IP not ready for
+      code generation: SPI2" in the log, shown as a "Warning: Code Generation" dialog). Put the
+      working values into the `.ioc` and check that CubeMX generates the same initialisation.
+- [ ] Hand-written IRQ handlers in `stm32g4xx_it.c` (outside USER CODE) for interrupts the `.ioc`
+      does not enable: enable the IRQ in the `.ioc` NVIC table instead ("Uses FreeRTOS functions");
+      CubeMX then generates the handler and the NVIC setup. CubeMX sets such an IRQ to priority 5
+      (= the threshold; valid) and resets edits of the value.
+- [ ] A `defaultTask` deleted from `main.c` by hand comes back on regeneration: plan its stack.
+- [ ] Tracked build output (`Debug/` makefiles, `.launch`), even if `.gitignore` lists it: untrack
+      it (it holds absolute paths); a fresh clone must build without it.
+- [ ] Find the CubeIDE project name in `.project` (it can differ from the `.ioc` name) for
+      `headless-build.sh -cleanBuild <project>`.
 - [ ] Double-spaced or unindented USER CODE sections (an old editor artefact): restore CubeMX's own
       layout for the default sections (whitespace-only commit).
 
@@ -139,6 +153,18 @@ keep step 2 to changes whose generated output is known.
       is busy merge into the latest. `sizeof(T) <= 64`. Remove any `portYIELD_FROM_ISR` (the
       library's wakeup yields). Choose the capacity and policy per example (KeepNewest/1 for a
       button: the latest state counts; a counter or a stream may need a larger buffer).
+- [ ] **[SENSOR] Policy for a data-ready trigger.** Ask what the element carries. A trigger that
+      carries no data ("a new sample is in the sensor") and a sensor that keeps only its latest
+      sample: **KeepNewest, capacity 1** — merged triggers lose nothing a queue would recover (queued
+      triggers would only read the same registers again: duplicate samples). Block with capacity N and
+      a counted overflow only if every element carries its own data (e.g. the ISR or DMA delivers the
+      sample, or the sensor FIFO is used). Elements over 64 B: send an index into a static buffer pool
+      (a channel of free indices returns the buffers) instead of raising the limit.
+- [ ] **[SENSOR] Lost-completion pattern:** a process re-arms the source (here: reading the sample
+      lowers the data-ready line) and then waits for the next interrupt on a rendezvous channel.
+      Under 1.x an interrupt that arrives before it waits is dropped; with an edge-triggered,
+      level-held source (data-ready stays high until read) nothing re-triggers: the pipeline stops
+      for good, silently. A buffered ISR channel keeps the interrupt.
 - [ ] Channels (2.0.1, checked at compile time): rendezvous `Channel<T>` needs a trivially copyable `T`,
       accepts only `BufferPolicy::Block`, and has no ISR writer; it creates no RTOS object (critical
       section + thread flags). Buffered channels use CMSIS-RTOS2 semaphores (`csp_semaphore.h`),
@@ -157,7 +183,8 @@ keep step 2 to changes whose generated output is known.
 ## 6. Untrack `.settings/language.settings.xml`; fix LICENSE (one commit each)
 
 - [ ] `git rm --cached`; add to `.gitignore`. (Verified by the fresh-clone import in step 8.)
-- [ ] `LICENSE`: "Copyright (c) <year of the first commit> Oliver Faust"; MIT text unchanged.
+- [ ] `LICENSE`: "Copyright (c) <year of the first commit> Oliver Faust"; MIT text unchanged. If the
+      repository has no LICENSE (_Sensor), add the same MIT file (flag it: a licensing decision).
 
 ## 7. README (commit)
 
@@ -185,6 +212,16 @@ keep step 2 to changes whose generated output is known.
       fires 1 interrupt, `osDelay(1)`, then N back to back. Baseline (old rendezvous `putFromISR`):
       1 of 11 delivered, 10 silent failures. 2.0.1 (KeepNewest/1): first and last delivered, 0
       failures. Run each three times.
+- [ ] **[SENSOR] Overrun test in two phases** (instrumented scratch copy, `overrun_patch.py`):
+      phase 1, N interrupts right after `Run()` created the network, before the reader waits (the
+      lost-completion case): 1.x loses all N and the reader's first wait lasts until the next
+      interrupt (with a level-held source: for ever); 2.0.1 loses none, the first wait returns at
+      once. Phase 2, N interrupts back to back while the reader waits but cannot run yet: 1.x hands
+      the first to the waiting reader and drops N-1; 2.0.1 buffers the first too, so all N merge
+      into **one** (not two: a buffered channel does not hand over directly). With the real sensor,
+      natural interrupts also arrive: compare differences over a short window, not totals.
+- [ ] **[SENSOR] Hardware with the sensor connected** for the board results; without it only the
+      interrupt mechanics can be checked (WHO_AM_I fails, readings are zero).
 - [ ] Regenerate from the `.ioc`: `git status` clean; rebuilt ELFs byte-identical (then the board
       output is identical by construction).
 - [ ] Fresh clone to another path, empty workspace, import, build both configurations, flash:
