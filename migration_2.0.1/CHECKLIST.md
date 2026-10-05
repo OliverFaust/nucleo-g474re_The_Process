@@ -6,23 +6,27 @@ on nucleo-g474re_Interrupts (interrupt steps marked **[IRQ]** below; scripts `ru
 interrupts, `burst_patch.py`, `burst_read.sh` there).
 then on nucleo-g474re_Sensor_Data_Processing_Network (sensor data-ready interrupt, steps marked
 **[SENSOR]**; scripts `run.sh`, `overrun_patch.py`, `overrun_read.sh` there).
-Remaining: _Alternation.
+then on nucleo-g474re_Alternation (ALT steps marked **[ALT]**; scripts `fair_patch.py`, `fair_read.sh`
+there). All five chapter repositories are done.
 Work on a branch `csp4cmsis-2.0.1`; commit locally; one commit per step below.
 
 Tools: STM32CubeIDE 2.1.0, STM32CubeMX 6.17.0, FW_G4 V1.6.3, STM32CubeProgrammer, the CSP4CMSIS
 repository at tag v2.0.1 (for the library and `tests/hw_nucleo_g474/nucleo_run.py`), NUCLEO-G474RE.
 Build headless: `headless-build.sh -data <empty workspace> -import <repo> -cleanBuild <project>`.
 Regenerate headless: CubeMX `-q` script `config load <ioc>` / `project generate` / `exit`
-(a "Warning: Code Generation" dialog means `USE_NEWLIB_REENTRANT` is still off). Since 2026-10-04,
-CubeMX 6.17.0 also stops loading any project still on FW_G4 **V1.6.1** with a "New STM32Cube firmware
-version available" dialog (the CLI hangs: `regen.sh` reports TIMEOUT). Projects on V1.6.3 are not
+(a "Warning: Code Generation" dialog means `USE_NEWLIB_REENTRANT` is still off). On 2026-10-04 (from
+about 00:33, gone again later that day), CubeMX 6.17.0 also stopped loading any project still on FW_G4
+**V1.6.1** with a "New STM32Cube firmware version available" dialog (the CLI hangs: `regen.sh` reports TIMEOUT). Projects on V1.6.3 are not
 affected: do every regeneration that needs new `.ioc` settings after the migration (step 3), and
 keep step 2 to changes whose generated output is known.
 
 ## 1. Analysis and baseline (commit: `migration_2.0.1/BASELINE.md`)
 
-- [ ] `git fetch`; fast-forward the default branch; branch off. Note the checked-out branch (e.g.
-      _Alternation is on `develop`).
+- [ ] `git fetch`; fast-forward the default branch; branch off. Note the checked-out branch. If the
+      repository has no `main` (_Alternation had only `develop` as GitHub default): stop; the author
+      renames the branch on GitHub (Settings → General → Default branch, rename: GitHub redirects
+      old links), then `git branch -m develop main`, `git branch -u origin/main`,
+      `git remote set-head origin -a`.
 - [ ] Library: `git rev-parse HEAD:lib/csp4cmsis` and compare with the other repositories and CSP4CMSIS
       history (_Interrupts and _Processes_and_Channels carry the same pre-1.0 snapshot as this one).
 - [ ] `.ioc`: `MxCube.Version`, `FirmwarePackage`, `VP_FREERTOS_VS_CMSIS_V2` (all five: CMSIS_V2),
@@ -165,6 +169,12 @@ keep step 2 to changes whose generated output is known.
       Under 1.x an interrupt that arrives before it waits is dropped; with an edge-triggered,
       level-held source (data-ready stays high until read) nothing re-triggers: the pipeline stops
       for good, silently. A buffered ISR channel keeps the interrupt.
+- [ ] **[ALT] Check every Alternative against the 2.0 rules** before changing anything: at most one
+      ALTing reader and one ALTing writer per channel (else the fatal-error hook); no reliance on a
+      symmetric ALT timing out or hanging (it now communicates); no policy on a rendezvous channel;
+      timeouts (`RelTimeoutGuard`) are timer-free with a fixed per-`select()` deadline. Note
+      `priSelect` vs `fairSelect`, input/output guards, and what the example prints or measures. The
+      ALT source (`Alternative alt(in | var, ...)`, `fairSelect()`) compiles unchanged.
 - [ ] Channels (2.0.1, checked at compile time): rendezvous `Channel<T>` needs a trivially copyable `T`,
       accepts only `BufferPolicy::Block`, and has no ISR writer; it creates no RTOS object (critical
       section + thread flags). Buffered channels use CMSIS-RTOS2 semaphores (`csp_semaphore.h`),
@@ -227,6 +237,26 @@ keep step 2 to changes whose generated output is known.
       image with the same pattern. Counts differ with the hand stimulus: compare that both detect and
       that the messages alternate correctly. Read stack marks afterwards over SWD without reflashing
       (the image keeps running), so the printing paths are included.
+- [ ] **[ALT] Selection distribution** over a long run (instrumented scratch copy, `fair_patch.py`):
+      counts per guard, switches between guards, longest run of one guard and where it ends,
+      per-block spread, time. 1.x: depends on timing (here 99.3 % switches, runs up to 3484 in one
+      image, the same image repeats exactly). 2.0.1 `fairSelect()` with all guards always ready:
+      strict rotation (100 % switches, longest run 1), Debug and Release. State whether the
+      distributions agree; a 1.x run without wrong data does not prove a 1.x defect.
+- [ ] **[ALT] Classify every output difference**: (a) fixed 1.x defect (name it, show evidence), (b)
+      intended 2.0 behaviour, (c) regression (stop). A missing final line (`SUCCESS`) is not yet a
+      regression: with several printing processes the console driver drops characters. Check
+      completion without changing the loop's timing: a "done" flag set once before the final
+      `printf`, a counter of `HAL_BUSY` drops in `__io_putchar()` (test copy), or the threads' state
+      over SWD (TCB `xStateListItem.pvContainer` = delayed list and `ucNotifyState` = 0 means every
+      process is in its final `SleepFor()`; offsets with `arm-none-eabi-gdb` on the Debug ELF).
+- [ ] **[ALT] Formal model:** does it still match? CSP `[]` = exactly one event of the chosen channel,
+      which 2.0's one-winner protocol guarantees; `[]` does not express fairness (correct readme
+      claims that the model checks fairness, and descriptions of the 1.x implementation).
+- [ ] Messages about `StaticNetwork`: `Run()` returns at once; text such as "network finished" after
+      `Run()` is wrong.
+- [ ] Zero-heap claims in banners or README: make them true (unbuffered `stdout`,
+      `setvbuf(stdout, NULL, _IONBF, 0)` in `USER CODE 2`) or reword them; measure both heaps.
 - [ ] Regenerate from the `.ioc`: `git status` clean; rebuilt ELFs byte-identical (then the board
       output is identical by construction).
 - [ ] Fresh clone to another path, empty workspace, import, build both configurations, flash:
