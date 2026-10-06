@@ -1,0 +1,33 @@
+# elf: v300_Debug.elf sha256=e59e82c8b4b9a7c033419bcddbf64a45d549ada53060264add05e1a55716fdbd
+# port: /dev/serial/by-id/usb-STMicroelectronics_STLINK-V3_002000353234510836303532-if02
+# start: 2026-10-06 20:33:55
+Welcome to STM32 world !
+
+=== STM32 FreeRTOS + CSP4CMSIS bootstrap ===
+
+--- Single Hello World Process ---
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+
+# TIMEOUT after 20 s
+
+# end: 2026-10-06 20:34:16 (20 s)

@@ -1,4 +1,4 @@
-# Checklist: updating a book example to CSP4CMSIS 2.0.1
+# Checklist: updating a book example to CSP4CMSIS 2.0.1 (sections 1-8) and 3.0.0 (section 9)
 
 Done first on nucleo-g474re_The_Process (`RESULTS.md`), then on nucleo-g474re_Processes_and_Channels
 (its `migration_2.0.1/RESULTS.md`; generic scripts `measure.py`, `seqcheck.py`, `run.sh` there), then
@@ -261,6 +261,42 @@ keep step 2 to changes whose generated output is known.
       output is identical by construction).
 - [ ] Fresh clone to another path, empty workspace, import, build both configurations, flash:
       output identical; Release ELF identical.
+
+
+## 9. Update 2.0.1 -> 3.0.0 (branch `csp4cmsis-3.0.0`; one commit per step; results in `migration_3.0.0/`)
+
+Done first on nucleo-g474re_The_Process (`../migration_3.0.0/RESULTS.md`). Migration table:
+`docs/CHANGES_3.0.md` in the CSP4CMSIS repository. Board, tools and scripts as in section 8.
+
+- [ ] `git fetch`; fast-forward `main`; branch `csp4cmsis-3.0.0`.
+- [ ] Library (commit): `git rm -r lib/csp4cmsis`; copy `git archive v3.0.0 csp4cmsis LICENSE`: `csp4cmsis/`
+      to `lib/csp4cmsis/`, `LICENSE` into it; `VERSION`: `CSP4CMSIS 3.0.0`, tag v3.0.0, commit `647a1cb`,
+      "unmodified". `diff -r` against the archive: only `LICENSE` and `VERSION` extra.
+- [ ] Defines (commit), `.cproject`, G++ compiler, **Debug and Release**: delete
+      `CSP4CMSIS_RTOS2_BACKEND_FREERTOS` and `CSP4CMSIS_STATIC_ALLOCATION`; keep
+      `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5` and `CSP4CMSIS_DEVICE_HEADER="stm32g4xx.h"`. 3.0 detects
+      FreeRTOS from `FreeRTOS.h` and allocates statically by default; it needs
+      `configSUPPORT_STATIC_ALLOCATION 1` (CubeMX CMSIS_V2: set; the build stops otherwise).
+- [ ] Code (commit), grep `Core/` for every name in the migration table:
+  - `SleepFor(Milliseconds(n).to_ticks())` -> `SleepFor(Milliseconds(n))`; a plain number
+    `SleepFor(n)`: decide what it means (time: `Milliseconds(n)`; ticks: `Ticks(n)`);
+    `SleepFor(osWaitForever)` -> `SleepFor(Forever)`;
+  - `Run()` without `ExecutionMode` -> name it (the old default was `TerminatingNetwork`);
+  - `SamplingBufferedChannel<T, N, P>` -> `BufferedChannel<T, N, P>`; `SignalChannel<>` ->
+    `SignalChannel`; `One2OneChannel`/`Any2OneChannel`/`SamplingChannel` -> `Channel<T>`;
+  - `getGuard()`, `internal_guard_ptr`, `Alternative({...})` -> `Alternative(in | v, timeout)`;
+  - `time.ticks` -> `to_ticks()`; `#include "csp/time.h"` -> nothing (`csp/csp4cmsis.h` only).
+- [ ] Build Debug and Release (headless, CubeIDE 2.1.0): 0 errors, 0 warnings.
+- [ ] Board (Debug and Release, `measure.py`/`run.sh` of section 8): output from reset identical to the
+      2.0.1 logs (compare from the reset banner; for continuous output `seqcheck.py`); stacks,
+      priorities, FreeRTOS heap (0 allocations with static allocation), `_sbrk`. Explain every difference.
+      The process object layout is unchanged in 3.0 (stack +0x10, control block +0x410).
+- [ ] Regenerate from the `.ioc`: `git status` clean, rebuilt ELFs byte-identical.
+- [ ] Fresh clone to another path, empty workspace, import, build both, flash: output identical, Release
+      ELF identical.
+- [ ] README (commit): CSP4CMSIS 3.0.0 in the versions table, the two defines, changed calls.
+- [ ] `migration_3.0.0/RESULTS.md`, logs, and `CHAPTER_CHANGES.md`: the 3.0 changes of the chapter
+      listings and text against the 2.0.1 list below (commit).
 
 ---
 
