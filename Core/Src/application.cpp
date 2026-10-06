@@ -12,7 +12,7 @@ class HelloProcess : public CSProcessStatic<256> {  // stack: 256 words = 1 KB
   void run() override {
     while (true) {
       printf("Hello world\r\n");
-      SleepFor(Milliseconds(1000).to_ticks());
+      SleepFor(Milliseconds(1000));
     }
   }
 };
