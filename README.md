@@ -5,7 +5,7 @@ A minimal demonstration of the **CSP (Communicating Sequential Processes)** libr
 ## Features
 
 - **FreeRTOS** with the CMSIS‑RTOS v2 API (STM32CubeMX `CMSIS_V2` interface)
-- **CSP4CMSIS 2.0.1** library for process‑based concurrency
+- **CSP4CMSIS 3.0.0** library for process‑based concurrency
 - **No FreeRTOS heap allocation**: every thread's stack and control block is static (see [Memory](#memory))
 - **Serial console output** via LPUART1, the ST‑LINK virtual COM port (115200 baud)
 - **Infinite loop** with a 1‑second delay to avoid console flooding
@@ -25,7 +25,7 @@ Tested with:
 | STM32CubeIDE | 2.1.0 (GNU Tools for STM32 14.3.rel1) |
 | STM32CubeMX (only to regenerate code) | 6.17.0 |
 | STM32Cube FW_G4 | V1.6.3 (FreeRTOS 10.3.1) |
-| CSP4CMSIS | 2.0.1, in `lib/csp4cmsis/` (unmodified; see `lib/csp4cmsis/VERSION`) |
+| CSP4CMSIS | 3.0.0, in `lib/csp4cmsis/` (unmodified; see `lib/csp4cmsis/VERSION`) |
 
 ## Serial Configuration
 
@@ -46,7 +46,7 @@ Tested with:
 5. Build the project (configuration `Debug` or `Release`).  
 6. Flash the binary to your Nucleo board.
 
-The CSP4CMSIS settings are already in the project (G++ compiler, Debug and Release): include path `../lib/csp4cmsis/inc`, and the defines `CSP4CMSIS_RTOS2_BACKEND_FREERTOS`, `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5`, `CSP4CMSIS_STATIC_ALLOCATION` and `CSP4CMSIS_DEVICE_HEADER="stm32g4xx.h"` (explained in the [CSP4CMSIS STM32CubeIDE guide](https://github.com/OliverFaust/CSP4CMSIS/blob/main/Documentation/CSP4CMSIS_STM32CubeIDE.md)).
+The CSP4CMSIS settings are already in the project (G++ compiler, Debug and Release): include path `../lib/csp4cmsis/inc`, and the two defines `CSP4CMSIS_MAX_SYSCALL_INTERRUPT_PRIORITY=5` and `CSP4CMSIS_DEVICE_HEADER="stm32g4xx.h"`; CSP4CMSIS allocates its RTOS objects statically by default and finds FreeRTOS from `FreeRTOS.h` (explained in the [CSP4CMSIS STM32CubeIDE guide](https://github.com/OliverFaust/CSP4CMSIS/blob/main/Documentation/CSP4CMSIS_STM32CubeIDE.md)).
 
 ## Regenerating code with STM32CubeMX
 
@@ -57,7 +57,7 @@ The CSP4CMSIS settings are already in the project (G++ compiler, Debug and Relea
 ├── Core/            # main.c (CubeMX), application.cpp (the example)
 ├── Drivers/         # STM32 HAL, CMSIS and BSP drivers
 ├── Formal model/    # CSP-M model of HelloProcess
-├── lib/csp4cmsis/   # CSP4CMSIS 2.0.1 (inc/, src/, LICENSE, VERSION)
+├── lib/csp4cmsis/   # CSP4CMSIS 3.0.0 (inc/, src/, LICENSE, VERSION)
 ├── Middlewares/     # FreeRTOS + CMSIS‑RTOS v2
 ├── nucleo-g474re_v10.ioc  # STM32CubeMX project
 └── README.md
@@ -67,7 +67,7 @@ The CSP4CMSIS settings are already in the project (G++ compiler, Debug and Relea
 ## How It Works
 
 1. **Process**: `HelloProcess` inherits from `CSProcessStatic<256>`, a CSP process with a static 256‑word (1 KB) stack, and overrides the `run()` method.  
-2. **Infinite loop**: Inside `run()`, the process prints `"Hello world"` and then sleeps for 1000 ms with `SleepFor(Milliseconds(1000).to_ticks())`.  
+2. **Infinite loop**: Inside `run()`, the process prints `"Hello world"` and then sleeps for 1000 ms with `SleepFor(Milliseconds(1000))`.  
 3. **Parallel composition**: `InParallel(hello)` composes the single process.  
 4. **Static network**: `Run(..., ExecutionMode::StaticNetwork, priority)` creates the process's thread and returns; the network runs for ever.  
 5. **Start-up**: `main.c` calls `csp_app_main_init()`, which creates the `MainApp` thread (static 2 KB stack). `MainApp` prints the banner, starts the network and exits. `MainApp` runs at a higher priority (`osPriorityBelowNormal`) than the network (`osPriorityLow`), so `HelloProcess` first runs after `MainApp` has exited.
