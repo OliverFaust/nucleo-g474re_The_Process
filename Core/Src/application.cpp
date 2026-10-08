@@ -33,7 +33,7 @@ static StaticTask_t mainAppControlBlock;
 void MainApp_Task(void* argument) {
   (void)argument;
   osDelay(10);
-  printf("\r\n--- Single Hello World Process ---\r\n");
+  printf("\r\n--- Single Hello World Process (Zero-Heap) ---\r\n");
 
   static HelloProcess hello;
 
