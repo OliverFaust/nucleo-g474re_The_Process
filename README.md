@@ -95,7 +95,7 @@ Measured on the board (Debug and Release, after 20 s):
 - **FreeRTOS heap: not used.** `pvPortMalloc()` is never called (0 allocations). `HelloProcess`, `MainApp`, and FreeRTOS's idle and timer tasks all have static stacks and control blocks. The FreeRTOS heap (`configTOTAL_HEAP_SIZE`) is therefore set to only 1 KB: enough for one small dynamically created thread (a 128‑word stack and its control block) if you switch one back to dynamic allocation.
 - **C library heap: not used.** `main.c` (USER CODE 2) makes `stdout` unbuffered with `setvbuf(stdout, NULL, _IONBF, 0)`; otherwise newlib's `printf()` would `malloc()` a 1 KB `stdout` buffer on first use (measured: 1032 B). With it, `_sbrk()` is never called.
 - So the program allocates no heap memory at all: the "(Zero-Heap)" in the start-up banner is literal.
-- **Stacks used** (Debug; Release in brackets): `HelloProcess` 348 B (300 B) of 1 KB, `MainApp` 348 B (300 B) of 2 KB, `defaultTask` 128 B (100 B) of 2 KB.
+- **Stacks used** (Debug; Release in brackets): `HelloProcess` 304 B (264 B) of 1 KB, `MainApp` 348 B (264 B) of 2 KB.
 
 ## Key CSP4CMSIS Concepts Demonstrated
 * **Process** – creating a custom process by inheriting from `CSProcessStatic<N>`.

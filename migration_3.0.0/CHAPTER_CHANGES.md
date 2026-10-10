@@ -23,3 +23,15 @@ The 2.0.1 list (`../migration_2.0.1/CHECKLIST.md`, end) still applies; for 3.0.0
    `_sbrk()` is never called (measured), as in Alternation and the Sensor chapter. The start-up banner
    becomes `--- Single Hello World Process (Zero-Heap) ---` (as in those two chapters), and the text can say that the program
    allocates no heap memory at all (FreeRTOS heap: 0 allocations; C library heap: not used).
+7. **Simplified listing (branch `simplify-chapter-code`):** the code shows the chapter's concept and
+   nothing else.
+   - `HelloProcess` loses its `name()` override; otherwise the listing is unchanged.
+   - **`main.c`:** CubeMX's `defaultTask` is removed (its attributes, its creation, `StartDefaultTask`).
+     The program's threads are now exactly the ones in `application.cpp` (MainApp and the processes),
+     plus FreeRTOS's idle and timer tasks. The `.ioc` still contains the task: CubeMX does not allow a
+     project without one and re-creates it on regeneration (from the `.ioc`, as the static, heap-free
+     task it was); the README says to delete it again.
+   - **Thread names:** without the `name()` overrides, the processes appear as `csp_task` in a
+     debugger's thread view; MainApp keeps its name (`attr.name`).
+   - **Comments** shortened to what is surprising; the explanations are in the chapter text.
+   - The console output is unchanged.
