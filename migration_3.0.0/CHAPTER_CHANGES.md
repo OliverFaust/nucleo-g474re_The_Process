@@ -17,5 +17,9 @@ The 2.0.1 list (`../migration_2.0.1/CHECKLIST.md`, end) still applies; for 3.0.0
    `csp4cmsis.h` includes `FreeRTOS.h` here (static allocation embeds FreeRTOS control blocks in the process
    objects); the listing keeps its own `#include "FreeRTOS.h"` because MainApp's `StaticTask_t` is its own.
 4. **Measured stack use:** HelloProcess 332 B of 1 KB in Debug (was 348 B), 300 B in Release.
-5. **Unchanged:** console output, priorities, start order, memory (0 FreeRTOS heap allocations, newlib's
-   1 KB `stdout` buffer), CubeMX settings, the formal model.
+5. **Unchanged:** console output, priorities, start order, memory (0 FreeRTOS heap allocations; for the C library heap see item 6), CubeMX settings, the formal model.
+6. **No heap at all (branch `unbuffered-stdout`):** `main.c` (USER CODE 2) makes `stdout` unbuffered with
+   `setvbuf(stdout, NULL, _IONBF, 0)`, so newlib's `printf()` no longer allocates its 1 KB `stdout` buffer:
+   `_sbrk()` is never called (measured), as in Alternation and the Sensor chapter. The start-up banner
+   becomes `--- Single Hello World Process (Zero-Heap) ---` (as in those two chapters), and the text can say that the program
+   allocates no heap memory at all (FreeRTOS heap: 0 allocations; C library heap: not used).
