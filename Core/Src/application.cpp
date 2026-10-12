@@ -1,11 +1,11 @@
 #include <cstdio>
 #include "cmsis_os2.h"
-#include "FreeRTOS.h"  // StaticTask_t
+#include "FreeRTOS.h"
 #include "csp/csp4cmsis.h"
 
 using namespace csp;
 
-class HelloProcess : public CSProcessStatic<256> {  // stack: 256 words = 1 KB
+class HelloProcess : public CSProcessStatic<256> {
  public:
   void run() override {
     while (true) {
@@ -15,12 +15,9 @@ class HelloProcess : public CSProcessStatic<256> {  // stack: 256 words = 1 KB
   }
 };
 
-// MainApp runs above the network, so HelloProcess first runs after MainApp has printed
-// its banner and exited.
 static constexpr osPriority_t MAIN_APP_PRIORITY = osPriorityBelowNormal;
 static constexpr osPriority_t NETWORK_PRIORITY  = osPriorityLow;
 
-// Static stack (512 words = 2 KB) and control block: no heap.
 alignas(8) static uint32_t mainAppStack[512];
 static StaticTask_t mainAppControlBlock;
 

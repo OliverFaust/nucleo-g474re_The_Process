@@ -2,6 +2,8 @@
 
 A minimal demonstration of the **CSP (Communicating Sequential Processes)** library CSP4CMSIS using CMSIS‑RTOS v2 on an STM32G474RE microcontroller. This project shows a single process that prints "Hello world" repeatedly – the simplest possible Communicating Sequential Processes (CSP) network. The corresponding formal CSP model is in [`Formal model/`](Formal%20model/).
 
+The explanations for this code are in the book; the source files deliberately contain no comments.
+
 ## Features
 
 - **FreeRTOS** with the CMSIS‑RTOS v2 API (STM32CubeMX `CMSIS_V2` interface)
